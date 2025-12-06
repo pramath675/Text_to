@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""
+third_website.py
+
+A small 3-page website (Home, About, Contact) served with Flask.
+Single-file: templates are rendered with render_template_string for easy copy-paste.
+Contact form submissions are appended to 'contacts.csv'.
+"""
+
+from flask import Flask, request, redirect, url_for, flash, render_template_string, send_from_directory
+from pathlib import Path
+import csv
+import datetime
+import os
+
+app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-key")  # change in production
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+CONTACT_FILE = DATA_DIR / "contacts.csv"
+
+# Ensure contact file has header
+if not CONTACT_FILE.exists():
+    with CONTACT_FILE.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["timestamp", "name", "email", "message"])
+
+# ---------- Shared layout ----------
+BASE_HTML = """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{ title }} — My 3-Page Site</title>
+  <style>
+    /* Simple responsive styling */
+    :root{--accent:#4F46E5;--muted:#6B7280}
+    body{font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;margin:0;color:#111;background:#f7f7fb}
+    header{background:linear-gradient(90deg,rgba(79,70,229,0.95),rgba(99,102,241,0.95));color:white;padding:18px 24px}
+    .container{max-width:960px;margin:28px auto;padding:0 18px}
+    nav{display:flex;gap:12px;align-items:center}
+    a.brand{font-weight:700;color:white;text-decoration:none;margin-right:12px}
+    a.nav{color:rgba(255,255,255,0.9);text-decoration:none;padding:8px;border-radius:8px}
+    a.nav:hover{background:rgba(255,255,255,0.06)}
+    .card{background:white;border-radius:12px;padding:20px;box-shadow:0 6px 18px rgba(18,18,18,0.06)}
+    footer{color:var(--muted);text-align:center;padding:28px 0;font-size:14px}
+    .grid{display:grid;gap:18px}
+    @media(min-width:720px){.grid{grid-template-columns:1fr 320px}}
+    .btn{display:inline-block;padding:10px 14px;border-radius:10px;background:var(--accent);color:white;text-decoration:none}
+    .muted{color:var(--muted)}
+    input,textarea{width:100%;padding:10px;border:1px solid #e6e6ef;border-radius:8px;font-size:15px}
+    label{display:block;margin-bottom:6px;font-weight:600}
+    form .row{margin-bottom:12px}
+    .flash{padding:10px;border-radius:8px;background:#e6fffa;color:#064e3b;margin-bottom:12px}
+    .small{font-size:13px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <header>
+    <div style="max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 18px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <a href="{{ url_for('home') }}" class="brand">My3Site</a>
+        <nav>
+          <a class="nav" href="{{ url_for('home') }}">Home</a>
+          <a class="nav" href="{{ url_for('about') }}">About</a>
+          <a class="nav" href="{{ url_for('contact') }}">Contact</a>
+        </nav>
+      </div>
+      <div class="small">Made with ❤️ • Simple Flask site</div>
+    </div>
+  </header>
+
+  <main class="container">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="flash">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {{ body | safe }}
+  </main>
+
+  <footer>
+    <div class="container">
+      © {{ year }} — My3Site. Built with Flask. • <span class="small">This demo saves contact messages locally to <code>data/contacts.csv</code>.</span>
+    </div>
+  </footer>
+</body>
+</html>
+"""
+
+# ---------- Routes ----------
+@app.route("/")
+def home():
+    body = """
+    <div class="card">
+      <h1 style="margin-top:0">Welcome to My 3-Page Website</h1>
+      <p class="muted">A compact demo site built with a single Python file. Use it as a starter for portfolios, school projects, or small business pages.</p>
+      <div style="display:flex;gap:12px;margin-top:18px;flex-wrap:wrap">
+        <a class="btn" href="{{ url_for('about') }}">Learn more</a>
+        <a style="align-self:center" href="{{ url_for('contact') }}">Contact us →</a>
+      </div>
+    </div>
+
+    <div style="height:18px"></div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>What you get</h3>
+        <ul>
+          <li>Home / About / Contact pages</li>
+          <li>Contact form that saves to a CSV</li>
+          <li>Simple responsive layout you can edit</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Quick tips</h3>
+        <ol class="small">
+          <li>Change the colors in the &lt;style&gt; block</li>
+          <li>Replace text and add images by editing the route templates</li>
+          <li>To deploy: use a WSGI server (Gunicorn/uvicorn) and a proper static file setup</li>
+        </ol>
+      </div>
+    </div>
+    """
+    return render_template_string(BASE_HTML, title="Home", body=body, year=datetime.date.today().year)
+
+@app.route("/about")
+def about():
+    body = """
+    <div class="card">
+      <h1 style="margin-top:0">About This Site</h1>
+      <p class="muted">This site is intentionally minimal so you can quickly customize it. It's perfect for a small project or as a template to learn Flask.</p>
+
+      <h3 style="margin-top:18px">Features</h3>
+      <ul>
+        <li>Single-file code to make distribution easy</li>
+        <li>Works locally and is easy to containerize</li>
+        <li>Contact form demonstrates server-side form handling</li>
+      </ul>
+    </div>
+    """
+    return render_template_string(BASE_HTML, title="About", body=body, year=datetime.date.today().year)
+
+@app.route("/contact", methods=["GET", "POST"])
+def contact():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip()
+        message = request.form.get("message", "").strip()
+
+        # Basic validation
+        if not name or not email or not message:
+            flash("Please fill all fields before submitting.")
+            return redirect(url_for("contact"))
+
+        # Append to CSV
+        ts = datetime.datetime.utcnow().isoformat()
+        with CONTACT_FILE.open("a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([ts, name, email, message])
+
+        flash("Thanks — your message has been saved. We will get back to you soon!")
+        return redirect(url_for("contact"))
+
+    body = """
+    <div class="card">
+      <h1 style="margin-top:0">Contact Us</h1>
+      <p class="muted">Send a message and it will be saved locally. Perfect for demos.</p>
+
+      <form method="post" novalidate>
+        <div class="row">
+          <label for="name">Name</label>
+          <input id="name" name="name" placeholder="Your name" required>
+        </div>
+
+        <div class="row">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" placeholder="you@example.com" required>
+        </div>
+
+        <div class="row">
+          <label for="message">Message</label>
+          <textarea id="message" name="message" rows="5" placeholder="Write your message…" required></textarea>
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn" type="submit">Send message</button>
+          <div class="small">Or email: <strong>hello@example.com</strong></div>
+        </div>
+      </form>
+    </div>
+
+    <div style="height:14px"></div>
+    <div class="card small">
+      <strong>Saved messages</strong>
+      <p class="small muted">This shows the latest 5 contact submissions saved in <code>data/contacts.csv</code>.</p>
+      {% set rows = read_contacts(5) %}
+      {% if rows %}
+        <ul>
+          {% for r in rows %}
+            <li><strong>{{ r[1] }}</strong> — <span class="small">{{ r[2] }}</span><br><span class="small muted">{{ r[0] }} &nbsp;|&nbsp; {{ r[3] }}</span></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="small muted">No messages yet.</p>
+      {% endif %}
+    </div>
+    """
+    # helper to read inside template
+    def read_contacts(limit=5):
+        out = []
+        try:
+            with CONTACT_FILE.open("r", newline="", encoding="utf-8") as f:
+                reader = list(csv.reader(f))
+            # drop header and return last `limit` rows reversed (newest first)
+            rows = reader[1:] if len(reader) > 1 else []
+            rows = rows[::-1][:limit]
+            # ensure each row has 4 columns
+            for row in rows:
+                if len(row) < 4:
+                    row += [""] * (4 - len(row))
+                out.append(row)
+        except Exception:
+            return []
+        return out
+
+    return render_template_string(BASE_HTML, title="Contact", body=body, year=datetime.date.today().year, read_contacts=read_contacts)
+
+# Serve a simple robots.txt (optional)
+@app.route("/robots.txt")
+def robots():
+    return "User-agent: *\nDisallow:\n", 200, {"Content-Type": "text/plain"}
+
+# ---------- Run ----------
+if __name__ == "__main__":
+    # For development only. Use Gunicorn / waitress / etc in production.
+    app.run(host="0.0.0.0", port=8000, debug=True)
